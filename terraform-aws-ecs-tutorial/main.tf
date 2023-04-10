@@ -1,4 +1,19 @@
 # * Part 1 - Setup.
+terraform {
+	required_version = "~> 1.1"
+
+	required_providers {
+		aws = {
+			source  = "hashicorp/aws"
+			version = "~> 4.56"
+		}
+		docker = {
+			source  = "kreuzwerker/docker"
+			version = "~> 3.0"
+		}
+	}
+}
+
 locals {
 	container_name = "hello-world-container"
 	container_port = 8080 # ! Must be same port from our Dockerfile that we EXPOSE
