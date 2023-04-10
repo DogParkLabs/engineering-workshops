@@ -14,3 +14,7 @@
    ```
 
 1. Run `terraform init`
+
+## References
+
+- <https://github.com/1Mill/example-terraform-ecs/tree/main/examples/aws-resources>
