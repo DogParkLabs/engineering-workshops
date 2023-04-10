@@ -1,0 +1,7 @@
+# * Node
+node_modules
+
+# * Terraform
+*tfstate*
+.terraform
+aws.tfvars.json
