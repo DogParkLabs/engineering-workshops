@@ -1,3 +1,7 @@
+# * Part 0 - Give your project a unique name. You must use hyphens for
+# * spaces. Good examples are using your name like "nimit-shah".
+locals { example = "TODO_REPLACE_WITH_YOUR_NAME" }
+
 # * Part 1 - Setup.
 terraform {
 	required_version = "~> 1.1"
@@ -17,7 +21,6 @@ terraform {
 locals {
 	container_name = "hello-world-container"
 	container_port = 8080 # ! Must be same port from our Dockerfile that we EXPOSE
-	example = "TODO_REPLACE_WITH_YOUR_NAME"
 }
 
 
@@ -91,162 +94,69 @@ resource "docker_registry_image" "this" {
 }
 
 # * Part 3 - Setting up our networks to accept and make requests to the internet.
-# * Create an AWS Virtual Private Cloud (VPC).
-resource "aws_vpc" "this" { cidr_block = "10.0.0.0/16" }
-
-# * Create Security Groups that will allow our future resources to make and receive
-# * requests from the internet (e.g. people can visit our hello world application).
-resource "aws_security_group" "http" {
-	description = "Permit incoming HTTP traffic"
-	name = "http"
-	vpc_id = resource.aws_vpc.this.id
-
-	ingress {
-		cidr_blocks = ["0.0.0.0/0"]
-		from_port = 80
-		protocol = "TCP"
-		to_port = 80
-	}
-}
-resource "aws_security_group" "https" {
-	description = "Permit incoming HTTPS traffic"
-	name = "https"
-	vpc_id = resource.aws_vpc.this.id
-
-	ingress {
-		cidr_blocks = ["0.0.0.0/0"]
-		from_port = 443
-		protocol = "TCP"
-		to_port = 443
-	}
-}
-resource "aws_security_group" "egress_all" {
-	description = "Permit all outgoing traffic"
-	name = "egress-all"
-	vpc_id = resource.aws_vpc.this.id
-
-	egress {
-		cidr_blocks = ["0.0.0.0/0"]
-		from_port = 0
-		protocol = "-1"
-		to_port = 0
-	}
-}
-resource "aws_security_group" "ingress_api" {
-	description = "Permit some incoming traffic"
-	name = "ingress-esc-service"
-	vpc_id = resource.aws_vpc.this.id
-
-	ingress {
-		cidr_blocks = ["0.0.0.0/0"]
-		from_port = local.container_port
-		protocol = "TCP"
-		to_port = local.container_port
-	}
-}
-
 # * AWS requires us to use multiple Availability Zones and we only want to use
 # * ones the are up and running so we find those ones here.
 data "aws_availability_zones" "available" { state = "available" }
+module "vpc" {
+	source = "terraform-aws-modules/vpc/aws"
+	version = "~> 3.19.0"
 
-# * Create an Internet Gateway so that future resources running inside our VPC
-# * can connect to the interent.
-resource "aws_internet_gateway" "this" { vpc_id = resource.aws_vpc.this.id }
-
-# * Create public subnetworks (Public Subnets) that are exposed to the interent
-# * so that we can make and take requests.
-resource "aws_route_table" "public" { vpc_id = resource.aws_vpc.this.id }
-resource "aws_route" "public" {
-	destination_cidr_block = "0.0.0.0/0"
-	gateway_id = resource.aws_internet_gateway.this.id
-	route_table_id = resource.aws_route_table.public.id
-}
-resource "aws_subnet" "public" {
-	count = 2
-
-	availability_zone = data.aws_availability_zones.available.names[count.index]
-	cidr_block = cidrsubnet(resource.aws_vpc.this.cidr_block, 8, count.index)
-	vpc_id = resource.aws_vpc.this.id
-}
-resource "aws_route_table_association" "public" {
-	# https://github.com/hashicorp/terraform/issues/22476#issuecomment-547689853
-	for_each = { for k, v in resource.aws_subnet.public : k => v.id }
-
-	route_table_id = resource.aws_route_table.public.id
-	subnet_id = each.value
-}
-
-# * Eventually we will make private subnetworks (Private Subnets) that will
-# * need to connect to external websites on the internet. To do this, we must
-# * create a NAT Gateway that will route those requests from our Private Subnet
-# * through our Public Subnets to actually reach those external websites.
-resource "aws_eip" "this" { vpc = true }
-resource "aws_nat_gateway" "this" {
-	allocation_id = resource.aws_eip.this.id
-	subnet_id = resource.aws_subnet.public[0].id # Just route all requests through one of our Public Subnets.
-
-	depends_on = [resource.aws_internet_gateway.this]
-}
-
-# * Create Private Subnets on our VPC. This acts like an isolated sandbox
-# * that we will run our future ECS Service inside of. Any requests to and
-# * from the broader internet will be filtered throught our Public Subnets
-# * and the NAT Gateway.
-resource "aws_route_table" "private" { vpc_id = resource.aws_vpc.this.id }
-resource "aws_route" "private" {
-	destination_cidr_block = "0.0.0.0/0"
-	nat_gateway_id = resource.aws_nat_gateway.this.id # Connect to NAT Gateway, not Internet Gateway
-	route_table_id = resource.aws_route_table.private.id
-}
-resource "aws_subnet" "private" {
-	count = 2
-
-	availability_zone = data.aws_availability_zones.available.names[count.index]
-	cidr_block = cidrsubnet(resource.aws_vpc.this.cidr_block, 8, count.index + length(resource.aws_subnet.public)) # Avoid conflicts with Public Subnets
-	vpc_id = resource.aws_vpc.this.id
-}
-resource "aws_route_table_association" "private" {
-	# https://github.com/hashicorp/terraform/issues/22476#issuecomment-547689853
-	for_each = { for k, v in resource.aws_subnet.private : k => v.id }
-
-	route_table_id = resource.aws_route_table.private.id
-	subnet_id = each.value
+	azs = slice(data.aws_availability_zones.available.names, 0, 2) # Span subnetworks across multiple avalibility zones
+	cidr = "10.0.0.0/16"
+	create_igw = true # Expose public subnetworks to the Internet
+	enable_nat_gateway = true # Hide private subnetworks behind NAT Gateway
+	private_subnets = ["10.0.1.0/24", "10.0.2.0/24"]
+	public_subnets = ["10.0.101.0/24", "10.0.102.0/24"]
 }
 
 # * Step 4 - Setting up our Application Load Balancers to manage incoming internet traffic.
 # * Create an AWS Application Load Balancer that accepts HTTP requests (on port 80) and
 # * forwards those requests to port 8080 (our container port) on the VPC where we will
 # * eventually run our container.
-resource "aws_lb" "this" {
+module "alb" {
+	source  = "terraform-aws-modules/alb/aws"
+	version = "~> 8.4.0"
+
 	load_balancer_type = "application"
+	security_groups = [module.vpc.default_security_group_id]
+	subnets = module.vpc.public_subnets
+	vpc_id = module.vpc.vpc_id
 
-	depends_on = [resource.aws_internet_gateway.this]
+	security_group_rules = {
+		ingress_all_http = {
+			type        = "ingress"
+			from_port   = 80
+			to_port     = 80
+			protocol    = "TCP"
+			description = "HTTP web traffic"
+			cidr_blocks = ["0.0.0.0/0"]
+		}
+		egress_all = {
+			type        = "egress"
+			from_port   = 0
+			to_port     = 0
+			protocol    = "-1"
+			cidr_blocks = ["0.0.0.0/0"]
+		}
+	}
 
-	security_groups = [
-		resource.aws_security_group.egress_all.id,
-		resource.aws_security_group.http.id,
-		resource.aws_security_group.https.id,
+	http_tcp_listeners = [
+		{
+			# ! Defaults to "forward" action for "target group"
+			# ! at index = 0 in "the target_groups" input below.
+			port               = 80
+			protocol           = "HTTP"
+			target_group_index = 0
+		}
 	]
 
-	subnets = resource.aws_subnet.public[*].id
-}
-resource "aws_lb_target_group" "this" {
-	port = local.container_port
-	protocol = "HTTP"
-	target_type = "ip"
-	vpc_id = resource.aws_vpc.this.id
-
-	depends_on = [resource.aws_lb.this]
-}
-resource "aws_lb_listener" "this" {
-	load_balancer_arn = resource.aws_lb.this.arn
-	port = 80
-	protocol = "HTTP"
-
-	default_action {
-		target_group_arn = aws_lb_target_group.this.arn
-		type = "forward"
-	}
+	target_groups = [
+		{
+			backend_port         = local.container_port
+			backend_protocol     = "HTTP"
+			target_type          = "ip"
+		}
+	]
 }
 
 # * Step 5 - Create our ECS Cluster that our ECS Service will run inside of.
@@ -302,117 +212,19 @@ resource "aws_ecs_service" "this" {
 	name = "${local.example}-service"
 	task_definition = resource.aws_ecs_task_definition.this.arn
 
-	lifecycle {
-		ignore_changes = [desired_count] # Allow external changes to happen without Terraform conflicts, particularly around auto-scaling.
-	}
-
 	load_balancer {
 		container_name = local.container_name
 		container_port = local.container_port
-		target_group_arn = resource.aws_lb_target_group.this.arn
+		target_group_arn = module.alb.target_group_arns[0]
 	}
 
 	network_configuration {
-		security_groups = [
-			resource.aws_security_group.egress_all.id,
-			resource.aws_security_group.ingress_api.id,
-		]
-		subnets = resource.aws_subnet.private[*].id
-	}
-}
-
-# * Setup autoscaling policies
-data "aws_arn" "this" { arn = resource.aws_ecs_service.this.id }
-resource "aws_appautoscaling_target" "ecs_target" {
-	max_capacity       = 4
-	min_capacity       = 1
-	resource_id        = data.aws_arn.this.resource
-	scalable_dimension = "ecs:service:DesiredCount"
-	service_namespace  = "ecs"
-}
-
-resource "aws_appautoscaling_policy" "ecs_policy_cpu" {
-	name               = "scale-up-policy-cpu"
-	policy_type        = "TargetTrackingScaling"
-	resource_id        = resource.aws_appautoscaling_target.ecs_target.resource_id
-	scalable_dimension = resource.aws_appautoscaling_target.ecs_target.scalable_dimension
-	service_namespace  = resource.aws_appautoscaling_target.ecs_target.service_namespace
-
-	target_tracking_scaling_policy_configuration {
-		target_value = 70
-		scale_in_cooldown = 300
-		scale_out_cooldown = 100
-
-		predefined_metric_specification {
-			predefined_metric_type = "ECSServiceAverageCPUUtilization"
-		}
-	}
-}
-
-resource "aws_appautoscaling_policy" "ecs_policy_memory" {
-	name               = "scale-up-policy-memory"
-	policy_type        = "TargetTrackingScaling"
-	resource_id        = resource.aws_appautoscaling_target.ecs_target.resource_id
-	scalable_dimension = resource.aws_appautoscaling_target.ecs_target.scalable_dimension
-	service_namespace  = resource.aws_appautoscaling_target.ecs_target.service_namespace
-
-	target_tracking_scaling_policy_configuration {
-		scale_in_cooldown = 300
-		scale_out_cooldown = 100
-		target_value = 70
-
-		predefined_metric_specification {
-			predefined_metric_type = "ECSServiceAverageMemoryUtilization"
-		}
-	}
-}
-
-resource "aws_appautoscaling_policy" "ecs_policy_alb" {
-	name               = "scale-up-policy-alb"
-	policy_type        = "TargetTrackingScaling"
-	resource_id        = resource.aws_appautoscaling_target.ecs_target.resource_id
-	scalable_dimension = resource.aws_appautoscaling_target.ecs_target.scalable_dimension
-	service_namespace  = resource.aws_appautoscaling_target.ecs_target.service_namespace
-
-	target_tracking_scaling_policy_configuration {
-		scale_in_cooldown = 300
-		scale_out_cooldown = 100
-		target_value = 300
-
-		predefined_metric_specification {
-			predefined_metric_type = "ALBRequestCountPerTarget"
-			resource_label = "${resource.aws_lb.this.arn_suffix}/${resource.aws_lb_target_group.this.arn_suffix}"
-		}
-	}
-}
-
-resource "aws_appautoscaling_scheduled_action" "scale_service_out" {
-	name               = "scale_service_out"
-	service_namespace  = resource.aws_appautoscaling_target.ecs_target.service_namespace
-	resource_id        = resource.aws_appautoscaling_target.ecs_target.resource_id
-	scalable_dimension = resource.aws_appautoscaling_target.ecs_target.scalable_dimension
-	schedule           = "cron(0 6 * * ? *)"
-
-	scalable_target_action {
-		max_capacity = 4
-		min_capacity = 2
-	}
-}
-
-resource "aws_appautoscaling_scheduled_action" "scale_service_in" {
-	name               = "scale_service_in"
-	service_namespace  = resource.aws_appautoscaling_target.ecs_target.service_namespace
-	resource_id        = resource.aws_appautoscaling_target.ecs_target.resource_id
-	scalable_dimension = resource.aws_appautoscaling_target.ecs_target.scalable_dimension
-	schedule           = "cron(0 18 * * ? *)"
-
-	scalable_target_action {
-		max_capacity = 2
-		min_capacity = 1
+		security_groups = [module.vpc.default_security_group_id]
+		subnets = module.vpc.private_subnets
 	}
 }
 
 # * Step 8 - See our application working.
 # * Output the URL of our Application Load Balancer so that we can connect to
 # * our application running inside  ECS once it is up and running.
-output "lb_url" { value = "http://${resource.aws_lb.this.dns_name}" }
+output "url" { value = "http://${module.alb.lb_dns_name}" }
