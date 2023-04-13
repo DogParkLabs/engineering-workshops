@@ -3,5 +3,5 @@ node_modules
 
 # * Terraform
 *tfstate*
+*tfvars*
 .terraform
-aws.tfvars.json

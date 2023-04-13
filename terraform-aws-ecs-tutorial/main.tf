@@ -20,8 +20,15 @@ locals {
 	example = "TODO_REPLACE_WITH_YOUR_NAME"
 }
 
+
+# * These variables are autoloaded from ./aws.auto.tfvars.json
+variable "AWS_ACCESS_KEY_ID" { type = string }
+variable "AWS_SECRET_ACCESS_KEY" { type = string }
 provider "aws" {
+	access_key = var.AWS_ACCESS_KEY_ID
 	region = "ca-central-1"
+	secret_key = var.AWS_SECRET_ACCESS_KEY
+
 
 	default_tags {
 		tags = { example = local.example }

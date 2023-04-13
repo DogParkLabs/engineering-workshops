@@ -4,7 +4,7 @@
 
 1. Install `docker ~> 20.10`
 1. Install `terraform ~> 1.4`
-1. Create a local `aws.tfvars.json` files with the following values from your instructor:
+1. Create a local `aws.auto.tfvars.json` files with the following values from your instructor:
 
    ```json
    {
