@@ -17,4 +17,5 @@
 
 ## References
 
+- <https://erik-ekberg.medium.com/terraform-ecs-fargate-example-1397d3ab7f02>
 - <https://github.com/1Mill/example-terraform-ecs/tree/main/examples/aws-resources>
