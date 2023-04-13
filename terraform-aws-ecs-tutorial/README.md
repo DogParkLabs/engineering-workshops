@@ -14,6 +14,7 @@
    ```
 
 1. Run `terraform init`
+1. Run `terraform plan` to check for any errors
 
 ## References
 
