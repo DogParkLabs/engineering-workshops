@@ -357,3 +357,6 @@ output "url" { value = "http://${module.alb.lb_dns_name}" }
 # * --- Step 22 ---
 # * When you are done exploring this workshop, delete everything by running
 # * `terraform destroy -auto-approve`.
+# *
+# * AWS networks can sometimes be flaky with Terraform, so if you see an error try
+# * running the command again.
