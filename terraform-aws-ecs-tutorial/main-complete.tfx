@@ -7,6 +7,7 @@
 # * (2) Setup an application load balancer to handle requests from the internet.
 # * (3) Setup an ECS Cluster to run our "Hello World" application.
 # * (4) Access our "Hello World" application from the internet.
+# * (5) Deploy a change to our "Hello World" application
 
 locals {
 	# * --- Step 1 ---
