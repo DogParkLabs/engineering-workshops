@@ -1,4 +1,5 @@
 # * Introduction
+# *
 # * We are going to learn how to use Terraform to deploy to AWS Elastic Container Service (ECS).
 # * We use ECS to run most of our backend services like Clifford, Scrappy, Sidekiq, and other in production.
 # * In this workshop we will:
