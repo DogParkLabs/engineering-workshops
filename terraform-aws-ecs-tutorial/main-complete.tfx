@@ -1,8 +1,8 @@
-# * Part 0 - Give your project a unique name. You must use hyphens for
+# * Step 1 - Give your project a unique name. You must use hyphens for
 # * spaces. Good examples are using your name like "nimit-shah".
 locals { example = "TODO_REPLACE_WITH_YOUR_NAME" }
 
-# * Part 1 - Setup.
+# * Step 2 - Setup.
 terraform {
 	required_version = "~> 1.1"
 
@@ -51,7 +51,7 @@ provider "docker" {
 	}
 }
 
-# * Part 2 - Build and push our Docker Image.
+# * Step 3 - Build and push our Docker Image.
 # * Create an ECR Repository that we will push our Docker Image to later.
 resource "aws_ecr_repository" "this" {
 	force_delete = true # Delete the repository even if it contains images
@@ -93,7 +93,7 @@ resource "docker_registry_image" "this" {
 	name = resource.docker_image.this.name
 }
 
-# * Part 3 - Setting up our networks to accept and make requests to the internet.
+# * Step 4 - Setting up our networks to accept and make requests to the internet.
 # * AWS requires us to use multiple Availability Zones and we only want to use
 # * ones the are up and running so we find those ones here.
 data "aws_availability_zones" "available" { state = "available" }
@@ -109,7 +109,7 @@ module "vpc" {
 	public_subnets = ["10.0.101.0/24", "10.0.102.0/24"]
 }
 
-# * Step 4 - Setting up our Application Load Balancers to manage incoming internet traffic.
+# * Step 5 - Setting up our Application Load Balancers to manage incoming internet traffic.
 # * Create an AWS Application Load Balancer that accepts HTTP requests (on port 80) and
 # * forwards those requests to port 8080 (our container port) on the VPC where we will
 # * eventually run our container.
@@ -159,14 +159,14 @@ module "alb" {
 	]
 }
 
-# * Step 5 - Create our ECS Cluster that our ECS Service will run inside of.
+# * Step 6 - Create our ECS Cluster that our ECS Service will run inside of.
 resource "aws_ecs_cluster" "this" { name = "${local.example}-cluster" }
 resource "aws_ecs_cluster_capacity_providers" "this" {
 	capacity_providers = ["FARGATE"]
 	cluster_name = resource.aws_ecs_cluster.this.name
 }
 
-# * Step 6 - Create our AWS ECS Task Definition which tells ECS how to run our
+# * Step 7 - Create our AWS ECS Task Definition which tells ECS how to run our
 # * container (from our Docker Image).
 data "aws_iam_policy_document" "this" {
 	version = "2012-10-17"
@@ -204,7 +204,7 @@ resource "aws_ecs_task_definition" "this" {
 	requires_compatibilities = ["FARGATE"]
 }
 
-# * Step 7 - Run our application.
+# * Step 8 - Run our application.
 resource "aws_ecs_service" "this" {
 	cluster = resource.aws_ecs_cluster.this.id
 	desired_count = 1
@@ -224,7 +224,7 @@ resource "aws_ecs_service" "this" {
 	}
 }
 
-# * Step 8 - See our application working.
+# * Step 9 - See our application working.
 # * Output the URL of our Application Load Balancer so that we can connect to
 # * our application running inside  ECS once it is up and running.
 output "url" { value = "http://${module.alb.lb_dns_name}" }
