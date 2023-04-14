@@ -353,3 +353,7 @@ output "url" { value = "http://${module.alb.lb_dns_name}" }
 # * Terraform will finish before the change is actually live, which can take upwards of 5
 # * minutes. So just watch the console until you see your changes actually deployed to the
 # * cluster.
+
+# * --- Step 22 ---
+# * When you are done exploring this workshop, delete everything by running
+# * `terraform destroy -auto-approve`.
