@@ -1,8 +1,28 @@
-# * Step 1 - Give your project a unique name. You must use hyphens for
-# * spaces. Good examples are using your name like "nimit-shah".
-locals { example = "TODO_REPLACE_WITH_YOUR_NAME" }
+# * Introduction
+# * We are going to learn how to use Terraform to deploy to AWS Elastic Container Service (ECS).
+# * We use ECS to run most of our backend services like Clifford, Scrappy, Sidekiq, and other in production.
+# * In this workshop we will:
+# * (1) Build and push an prebuilt "Hello World" Node application to AWS.
+# * (2) Setup an application load balancer to handle requests from the internet.
+# * (3) Setup an ECS Cluster to run our "Hello World" application.
+# * (4) Access our "Hello World" application from the internet.
 
-# * Step 2 - Setup.
+locals {
+	# * --- Step 1 ---
+	# * Give your project a unique name, like "nimit-shah", using hyphens to denote spaces.
+	example = "TODO_REPLACE_WITH_YOUR_NAME"
+
+	# * Do not change the "container_name" and "container_port" varaibles.
+	# * We need these values as is so that our "Hello World" app will run correctly.
+	container_name = "hello-world-container"
+	container_port = 8080 # ! Must be same port from our Dockerfile that we EXPOSE
+}
+
+# * Packages in Terraform are called "providers".
+# * In this "terraform" code block, we are telling Terraform which versions
+# * of the "aws" and "docker" providers we need.
+# * The Docker provider will be used to build and push our "Hello World" app
+# * to AWS while the AWS provider will run our app inside AWS.
 terraform {
 	required_version = "~> 1.1"
 
@@ -18,27 +38,49 @@ terraform {
 	}
 }
 
-locals {
-	container_name = "hello-world-container"
-	container_port = 8080 # ! Must be same port from our Dockerfile that we EXPOSE
-}
-
-
-# * These variables are autoloaded from ./aws.auto.tfvars.json
+# * In the README.md file for this tutorial, you should have setup
+# * a ./aws.auto.tfvars.json file that contains our AWS credentials.
+# * Terraform can accept input arguments as variables.
+# * Below, our "AWS_ACCESS_KEY_ID" and "AWS_SECRET_ACCESS_KEY" variables
+# * are our AWS credentials Terraform needs so that it can provision
+# * server infastructure: like our future ECS Cluster.
 variable "AWS_ACCESS_KEY_ID" { type = string }
 variable "AWS_SECRET_ACCESS_KEY" { type = string }
 provider "aws" {
 	access_key = var.AWS_ACCESS_KEY_ID
-	region = "ca-central-1"
 	secret_key = var.AWS_SECRET_ACCESS_KEY
 
+	# * --- Step 2 ---
+	# * We are going to provision all our infastructure in Canada.
+	# * So at this time, log into our Good Dog Development AWS account
+	# * and navigate to the Canada region.
+	region = "ca-central-1"
 
 	default_tags {
 		tags = { example = local.example }
 	}
 }
 
-# * Give Docker permission to pusher Docker Images to AWS.
+# * Before we start writing some Terraform code, this last peice of code
+# * authenticates our local Docker client with AWS so that we can push
+# * our "Hello World" application to AWS.
+# *
+# * This code introduces many new concepts such as how we can pass data around.
+# *
+# * Terraform is written using "blocks" which consist of "types", "labels" and "bodies".
+# *
+# * An example is 'data "aws_region" "this" {}' where "data" is the type, "aws_region"
+# * and "this" are "labels", and "{}" is an empty "body".
+# *
+# * Once a block is defined, we can access whatever "attributes" it may have in other
+# * blocks using type.label1.label2.attribute as an outline of the syntax Terraform uses.
+# *
+# * An example is data.aws_region.this.name which returns "ca-central-1": the AWS region
+# * we set in the AWS provider.
+# *
+# * Additionally, Terraform has many helper functions like "format" to make building
+# * strings with many arguments more readable.
+# *
 data "aws_caller_identity" "this" {}
 data "aws_ecr_authorization_token" "this" {}
 data "aws_region" "this" {}
@@ -51,78 +93,111 @@ provider "docker" {
 	}
 }
 
-# * Step 3 - Build and push our Docker Image.
-# * Create an ECR Repository that we will push our Docker Image to later.
+# * --- Step 3 ---
+# * With much of the foundation laid, lets now build our "Hello World" application.
+# *
+# * Our first "resource" type block will be our Elastic Container Registry.
 resource "aws_ecr_repository" "this" {
-	force_delete = true # Delete the repository even if it contains images
 	name = local.example
+	force_delete = true # * Make clean up easier by adding this now.
 }
 
-# * Give our Repository a policy to delete old Images to keep storage costs down.
-resource "aws_ecr_lifecycle_policy" "this" {
-	repository = resource.aws_ecr_repository.this.name
-	policy = jsonencode({
-		rules = [{
-			action = { type = "expire" }
-			description = "Delete all images except a handful of the newest images"
-			rulePriority = 1
-			selection = {
-				countNumber = 3
-				countType = "imageCountMoreThan"
-				tagStatus = "any"
-			}
-		}]
-	})
-}
+# * --- Step 4 ---
+# * With our first resource block written, run `terraform init` and then `terraform apply`.
+# *
+# * You will be prompted to review the infastructure changes.
+# * Look these over and then type `yes` to confirm the changes.
+# * Terraform will now go and provision our ECR in AWS.
+# *
+# * When Terraform is done, visit https://ca-central-1.console.aws.amazon.com/ecr/repositories?region=ca-central-1
+# * and find your ECR.
 
-# * Build our Image locally with the appropriate name to push our Image
-# * to our Repository in AWS.
+# * --- Step 5 ---
+# * The next resource we will write will tell Terraform how to (1) build our "Hello World"
+# * application Docker image, (2) give it a special name that will allow Terraform to push
+# * it to our ECR, and then (3) give our image a unique tag we will need later to deploy
+# * changes to our app.
+# *
+# * Build a "docker_image" resource that will build our application.
 resource "docker_image" "this" {
-	# Generate an image name that Docker will publish to our ECR instance like:
-	# 123456789.dkr.ecr.ca-central-1.amazonaws.com/abcdefghijk:2023-03-21T12-34-56
-	# {{123456789.dkr.ecr.ca-central-1.amazonaws.com}}/{{abcdefghijk}}:{{2023-03-21T12-34-56}}
-	# {{%v}}/{{%v}}:{{%v}}
 	name = format("%v/%v:%v", local.ecr_address, resource.aws_ecr_repository.this.id, formatdate("YYYY-MM-DD'T'hh-mm-ss", timestamp()))
 
-	build { context = "." }
+	build { context = "." } # * The path to our Dockerfile.
 }
 
-# * Push our Image to our Repository.
+# * --- Step 6 ---
+# * Build a "docker_registry_image" resource that will push our image to our ECR.
 resource "docker_registry_image" "this" {
-	keep_remotely = true # Do not delete the old image when a new image is built
 	name = resource.docker_image.this.name
+	keep_remotely = true # Do not delete the old image when a new image is built
 }
 
-# * Step 4 - Setting up our networks to accept and make requests to the internet.
-# * AWS requires us to use multiple Availability Zones and we only want to use
-# * ones the are up and running so we find those ones here.
+# * --- Step 7 ---
+# * Run `terraform apply -auto-approve` to auto approve our infastructure changes.
+# *
+# * When Terraform is done, visit your ECR and you should have a single image inside it.
+# *
+# * Every time we run `terraform apply -auto-approve` we will deploy a new image with a new tag.
+
+# * --- Step 8 ---
+# * Next, we will build a Virtual Private Computer (vpc) with an Internet Gateway (igw)
+# * and NAT Gateway so that our application can be accessed from and fetch data from the
+# * internet.
+# *
+# * To speed ourselves up, we are going to use a new block type called a "module" which is
+# * a pre-packaged plug-and-play set of infastructure.
+# *
+# * In the case below, our "vpc" module below, it will declare all the network, gateway, and
+# * security group resources we need to access our app from the interent for us: saving us
+# * a lot of work.
+# *
 data "aws_availability_zones" "available" { state = "available" }
 module "vpc" {
 	source = "terraform-aws-modules/vpc/aws"
 	version = "~> 3.19.0"
 
-	azs = slice(data.aws_availability_zones.available.names, 0, 2) # Span subnetworks across multiple avalibility zones
 	cidr = "10.0.0.0/16"
-	create_igw = true # Expose public subnetworks to the Internet
-	enable_nat_gateway = true # Hide private subnetworks behind NAT Gateway
-	private_subnets = ["10.0.1.0/24", "10.0.2.0/24"]
+
+	# * Span our subnetworks across multiple avalibility zones
+	azs = slice(data.aws_availability_zones.available.names, 0, 2)
+
+	# * Expose public subnetworks to the Internet
+	create_igw = true
 	public_subnets = ["10.0.101.0/24", "10.0.102.0/24"]
+
+	# * Hide private subnetworks behind NAT Gateway
+	enable_nat_gateway = true
+	private_subnets = ["10.0.1.0/24", "10.0.2.0/24"]
 }
 
-# * Step 5 - Setting up our Application Load Balancers to manage incoming internet traffic.
-# * Create an AWS Application Load Balancer that accepts HTTP requests (on port 80) and
-# * forwards those requests to port 8080 (our container port) on the VPC where we will
-# * eventually run our container.
+# * --- Step 9 ---
+# * Whenever we use a new module we must download the module before we can use it; we
+# * do this by running `terraform init`.
+# *
+# * Then, we can run `terraform apply -auto-approve`.
+# *
+# * AWS networks can sometimes be flaky with Terraform, so if you see an error try
+# * running the command again.
+
+# * --- Step 10 ---
+# * Just like our VPC, we are going to use another new module to provision an application
+# * load balancer.
+# *
+# * This load balancer will accept accept requests form the internet and route that traffic
+# * to our "Hello World" application later.
+# *
 module "alb" {
 	source  = "terraform-aws-modules/alb/aws"
 	version = "~> 8.4.0"
 
+	# * Route HTTP requests through out VPC.
 	load_balancer_type = "application"
 	security_groups = [module.vpc.default_security_group_id]
 	subnets = module.vpc.public_subnets
 	vpc_id = module.vpc.vpc_id
 
 	security_group_rules = {
+		# * Permit incoming HTTP requests from the internet.
 		ingress_all_http = {
 			type        = "ingress"
 			from_port   = 80
@@ -131,6 +206,7 @@ module "alb" {
 			description = "HTTP web traffic"
 			cidr_blocks = ["0.0.0.0/0"]
 		}
+		# * Permit all outgoing requests to the internet.
 		egress_all = {
 			type        = "egress"
 			from_port   = 0
@@ -142,8 +218,9 @@ module "alb" {
 
 	http_tcp_listeners = [
 		{
-			# ! Defaults to "forward" action for "target group"
-			# ! at index = 0 in "the target_groups" input below.
+			# * Setup a listener on port 80 and forward all HTTP
+			# * traffic to target_groups[0] defined below which
+			# * will eventually point to our "Hello World" app.
 			port               = 80
 			protocol           = "HTTP"
 			target_group_index = 0
@@ -159,15 +236,30 @@ module "alb" {
 	]
 }
 
-# * Step 6 - Create our ECS Cluster that our ECS Service will run inside of.
+
+# * --- Step 11 ---
+# * Run `terraform init` and then `terraform apply -auto-approve`.
+
+# * --- Step 12 ---
+# * With our networking all setup and our app image pushed to ECR we can now start
+# * building out Elastic Container Service (ECS) Cluster.
+# *
 resource "aws_ecs_cluster" "this" { name = "${local.example}-cluster" }
 resource "aws_ecs_cluster_capacity_providers" "this" {
 	capacity_providers = ["FARGATE"]
 	cluster_name = resource.aws_ecs_cluster.this.name
 }
 
-# * Step 7 - Create our AWS ECS Task Definition which tells ECS how to run our
-# * container (from our Docker Image).
+# * --- Step 13 ---
+# * Run `terraform apply -auto-approve` and look for your new cluster in
+# * https://ca-central-1.console.aws.amazon.com/ecs/v2/clusters?region=ca-central-1
+
+# * --- Step 14 ---
+# * Next, we need to give our cluster permission to run our application.
+# *
+# * We do this by creating an IAM Role with the AWS managed "AmazonECSTaskExecutionRolePolicy"
+# * which will allow our cluster to do ECS related things.
+# *
 data "aws_iam_policy_document" "this" {
 	version = "2012-10-17"
 
@@ -186,7 +278,12 @@ resource "aws_iam_role_policy_attachment" "default" {
 	policy_arn  = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 	role = resource.aws_iam_role.this.name
 }
+
+# * --- Step 15 ---
+# * Now, we can write our ECS Task Definition which tells our cluster how to run our application.
+# *
 resource "aws_ecs_task_definition" "this" {
+	# * A container definition may have multiple services, but ours is just our single app.
 	container_definitions = jsonencode([{
 		environment: [
 			{ name = "MY_INPUT_ENV_VAR", value = "terraform-modified-env-var" }
@@ -204,7 +301,14 @@ resource "aws_ecs_task_definition" "this" {
 	requires_compatibilities = ["FARGATE"]
 }
 
-# * Step 8 - Run our application.
+# * --- Step 16 ---
+# * Run `terraform apply -auto-approve` and look for your new task in
+# * https://ca-central-1.console.aws.amazon.com/ecs/v2/task-definitions?region=ca-central-1
+
+# * --- Step 17 ---
+# * For our last resource we need to build, we will create a new ECS Service inside our Cluster
+# * which will run our Task which will spin up our "Hello World" Node application.
+# *
 resource "aws_ecs_service" "this" {
 	cluster = resource.aws_ecs_cluster.this.id
 	desired_count = 1
@@ -224,7 +328,28 @@ resource "aws_ecs_service" "this" {
 	}
 }
 
-# * Step 9 - See our application working.
-# * Output the URL of our Application Load Balancer so that we can connect to
-# * our application running inside  ECS once it is up and running.
+# * --- Step 18 ---
+# * Run `terraform apply -auto-approve` and look for your cluster in
+# * https://ca-central-1.console.aws.amazon.com/ecs/v2/clusters?region=ca-central-1.
+# * Then, click on your cluster and you should see one service.
+# * Click on that service and you should see it in either a "pending" or "running" state.
+
+# * --- Step 19 ---
+# * Once your service is "running", we will use a new "output" type to print your
+# * application load balancer to your console.
 output "url" { value = "http://${module.alb.lb_dns_name}" }
+
+# * --- Step 20 ---
+# * Run `terraform apply -auto-approve` and visit the URL output by Terraform.
+# * When you visit the URL, you should see the "Hello World" returned from "./index.js".
+
+# * --- Step 21 ---
+# * With all the infastructure setup through Terraform, deploying a change is easy.
+# *
+# * Make a change to "./index.js" and then run `terraform apply -auto-approve`.
+# * When the service goes from "pending" back to "running" you should see your changes
+# * in the same outputted URL.
+# *
+# * Terraform will finish before the change is actually live, which can take upwards of 5
+# * minutes. So just watch the console until you see your changes actually deployed to the
+# * cluster.
