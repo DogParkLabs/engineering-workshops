@@ -16,8 +16,8 @@ describe Services::Buzz do
   context 'when #number is not divisible by 5' do
     let(:number) { 4 }
 
-    it 'returns nil' do
-      expect(call).to eq(nil)
+    it 'returns an empty string' do
+      expect(call).to eq('')
     end
   end
 end

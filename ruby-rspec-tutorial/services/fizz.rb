@@ -5,7 +5,7 @@ module Services
   # * when the number is divisible by 3.
   class Fizz
     def self.call(number)
-      (number % 3).zero? ? 'Fizz' : nil
+      (number % 3).zero? ? 'Fizz' : ''
     end
   end
 end

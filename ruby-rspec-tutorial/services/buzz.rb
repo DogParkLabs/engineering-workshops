@@ -5,7 +5,7 @@ module Services
   # * when the number is divisible by 5.
   class Buzz
     def self.call(number)
-      (number % 5).zero? ? 'Buzz' : nil
+      (number % 5).zero? ? 'Buzz' : ''
     end
   end
 end
