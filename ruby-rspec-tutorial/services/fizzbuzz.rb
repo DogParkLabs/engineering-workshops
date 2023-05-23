@@ -1,6 +1,8 @@
+# frozen_string_literal: true
+
 module Services
-	class FizzBuzz
-		def self.call
-		end
-	end
+  # * Accepts an integer and prints Fizz, Buzz, or FizzBuzz.
+  class FizzBuzz
+    def self.call; end
+  end
 end
