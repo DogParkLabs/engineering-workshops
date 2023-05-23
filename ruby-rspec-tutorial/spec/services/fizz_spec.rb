@@ -3,13 +3,13 @@
 require_relative '../../services/fizz'
 
 describe Services::Fizz do
-  subject { described_class.call(number) }
+  subject(:call) { described_class.call(number) }
 
   context 'when #number is divisible by 3' do
     let(:number) { 3 }
 
     it 'returns "Fizz"' do
-      expect(subject).to eq('Fizz')
+      expect(call).to eq('Fizz')
     end
   end
 
@@ -17,7 +17,7 @@ describe Services::Fizz do
     let(:number) { 4 }
 
     it 'returns nil' do
-      expect(subject).to eq(nil)
+      expect(call).to eq(nil)
     end
   end
 end
