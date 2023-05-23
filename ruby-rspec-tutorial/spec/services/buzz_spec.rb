@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative '../../services/Buzz'
+require_relative '../../services/buzz'
 
 describe Services::Buzz do
   subject { described_class.call(number) }
