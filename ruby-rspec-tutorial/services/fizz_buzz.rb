@@ -6,8 +6,7 @@ module Services
   # * by 5, and FizzBuzz when divisible by both 3 and 5.
   class FizzBuzz
     def self.call(number)
-      Fizz.call(number)+
-        Buzz.call(number)
+      Fizz.call(number) + Buzz.call(number)
     end
   end
 end

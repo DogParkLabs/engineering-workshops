@@ -15,7 +15,7 @@ describe Services::FizzBuzz do
     end
 
     context 'when #number is divisible not by 5' do
-      let(:number) {3}
+      let(:number) { 3 }
 
       it 'returns "Fizz"' do
         expect(call).to eq('Fizz')
@@ -33,7 +33,7 @@ describe Services::FizzBuzz do
     end
 
     context 'when #number is divisible not by 5' do
-      let(:number) {4}
+      let(:number) { 4 }
 
       it 'returns an empty string' do
         expect(call).to eq('')
