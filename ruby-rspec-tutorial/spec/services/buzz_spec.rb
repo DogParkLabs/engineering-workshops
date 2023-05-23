@@ -3,7 +3,7 @@
 require_relative '../../services/Buzz'
 
 describe Services::Buzz do
-  subject { Services::Buzz.call(number) }
+  subject { described_class.call(number) }
 
   context 'when #number is divisible by 5' do
     let(:number) { 5 }
